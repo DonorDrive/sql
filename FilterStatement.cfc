@@ -9,13 +9,16 @@ component accessors = "true" {
 
 	FilterStatement function init(required IQueryable queryable) {
 		// init internals that don't have defaults
-		structAppend(variables, {
+		structAppend(
+			variables,
+			{
 				activeFieldList: arguments.queryable.getFieldList(),
 				parameters: [],
 				queryable: arguments.queryable,
 				where: "",
 				whereCriteria: []
-			});
+			}
+		);
 
 		return this;
 	}
@@ -59,22 +62,28 @@ component accessors = "true" {
 					local.parsedStatement = ((getQueryable().getFieldSQL(local.field).len() > 0 ? getQueryable().getFieldSQL(local.field) : local.field) & " " & local.operator & (local.operator == "IN" ? " (?)" : " ?"));
 
 					variables.whereSQL = replace(
-							variables.whereSQL,
-							local.statement,
-							local.parsedStatement
-						);
+						variables.whereSQL,
+						local.statement,
+						local.parsedStatement
+					);
 
-					arrayAppend(variables.whereCriteria, {
+					arrayAppend(
+						variables.whereCriteria,
+						{
 							field: local.field,
 							operator: local.operator,
 							statement: local.parsedStatement
-						});
+						}
+					);
 
-					arrayAppend(variables.parameters, {
+					arrayAppend(
+						variables.parameters,
+						{
 							cfsqltype: getQueryable().getFieldSQLType(local.field),
 							list: local.operator == "IN",
 							value: local.value
-						});
+						}
+					);
 				} else {
 					throw(type = "UndefinedWhereField", message = "The field '#local.field#' does not exist");
 				}
