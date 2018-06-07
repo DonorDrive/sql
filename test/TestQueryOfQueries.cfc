@@ -18,7 +18,7 @@ component extends = "mxunit.framework.TestCase" {
 			);
 		}
 
-		variables.qoq = new lib.sql.QueryOfQueries(variables.query);
+		variables.qoq = new lib.sql.QueryOfQueries(query = variables.query).setIdentifierField("id");
 	}
 
 	function test_delete() {
@@ -46,6 +46,10 @@ component extends = "mxunit.framework.TestCase" {
 		assertEquals("timestamp", variables.qoq.getFieldSQLType("createdDate"));
 		assertEquals("integer", variables.qoq.getFieldSQLType("foo"));
 		assertEquals("bit", variables.qoq.getFieldSQLType("bar"));
+	}
+
+	function test_getIdentifierField() {
+		assertEquals("id", variables.qoq.getIdentifierField());
 	}
 
 	function test_insert() {

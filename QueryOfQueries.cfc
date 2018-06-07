@@ -1,6 +1,7 @@
 component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable" {
 
 	property name = "createdDateUTC" type = "date" setter = "false";
+	property name = "identifierField" type = "string";
 
 	QueryOfQueries function init(required query query) {
 		variables.createdDateUTC = now();
@@ -46,14 +47,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 			}
 		}
 
-		structAppend(
-			local.row,
-			{
-				"_modifiedDateUTC": now(),
-				"_queryID": variables.query.recordCount + 1
-			},
-			true
-		);
+		local.row._modifiedDateUTC = now();
 
 		queryAddRow(variables.query, local.row);
 	}
@@ -62,7 +56,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 		makeWritable();
 
 		local.updateRows = queryExecute(
-				"SELECT _queryID FROM query " & arguments.updateStatement.getWhereSQL(),
+				"SELECT #variables.identifierField# FROM query " & arguments.updateStatement.getWhereSQL(),
 				arguments.updateStatement.getParameters(),
 				{ dbtype: "query" }
 			);
@@ -74,7 +68,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 
 			for(local.row in local.updateRows) {
 				// arrayFind is not performant at the scale this will be operating at
-				local.rowNumber = variables.query["_queryID"].indexOf(local.row["_queryID"]) + 1;
+				local.rowNumber = variables.query[variables.identifierField].indexOf(local.row[variables.identifierField]) + 1;
 				for(local.field in local.updateFields) {
 					if(listFindNoCase(variables.query.columnList, local.field)) {
 						querySetCell(variables.query, local.field, local.updateFields[local.field].value, local.rowNumber);
@@ -90,7 +84,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 		makeWritable();
 
 		local.upsertRows = queryExecute(
-				"SELECT _queryID FROM query " & arguments.upsertStatement.getWhereSQL(),
+				"SELECT #variables.identifierField# FROM query " & arguments.upsertStatement.getWhereSQL(),
 				arguments.upsertStatement.getParameters(),
 				{ dbtype: "query" }
 			);
@@ -104,14 +98,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 				local.row[local.field] = local.upsertFields[local.field].value;
 			}
 
-			structAppend(
-				local.row,
-				{
-					"_modifiedDateUTC": now(),
-					"_queryID": variables.query.recordCount + 1
-				},
-				true
-			);
+			local.row._modifiedDateUTC = now();
 
 			queryAddRow(variables.query, local.row);
 		} else {
@@ -119,7 +106,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 			local.now = now();
 
 			for(local.row in local.upsertRows) {
-				local.rowNumber = variables.query["_queryID"].indexOf(local.row["_queryID"]) + 1;
+				local.rowNumber = variables.query[variables.identifierField].indexOf(local.row[variables.identifierField]) + 1;
 
 				for(local.field in local.upsertFields) {
 					querySetCell(variables.query, local.field, local.upsertFields[local.field].value, local.rowNumber);
@@ -219,11 +206,15 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 		return listFindNoCase(variables.query.columnList, arguments.fieldName);
 	}
 
+	boolean function fieldIsFilterable(required string fieldName) {
+		return fieldExists(arguments.fieldName);
+	}
+
 	string function getFieldList() {
 		return arrayReduce(
 			variables.query.getMetadata().getColumnLabels(),
 			function(l, v) {
-				if(v != "_queryID" && v != "_modifiedDateUTC") {
+				if(v != "_modifiedDateUTC") {
 					return listAppend(l, v);
 				} else {
 					return l;
@@ -242,15 +233,11 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 	}
 
 	private void function makeWritable() {
-		// set internal columns to facilitate modification
-		if(!listFindNoCase(variables.query.columnList, "_queryID")) {
-			queryAddColumn(variables.query, "_queryID", "varchar", []);
-
-			for(local.row in variables.query) {
-				querySetCell(variables.query, "_queryID", variables.query.currentRow, variables.query.currentRow);
-			}
+		if(!structKeyExists(variables, "identifierField")) {
+			throw(type = "MissingIdentifierField", message = "No identifierField has been defined");
 		}
 
+		// set internal columns to facilitate modification
 		if(!listFindNoCase(variables.query.columnList, "_modifiedDateUTC")) {
 			local.dateValues = [];
 			arraySet(local.dateValues, 1, variables.query.recordCount, now());
