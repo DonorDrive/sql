@@ -57,7 +57,7 @@ component accessors = "true" {
 					local.value = REReplace(mid(arguments.where, local.matches.pos[4], local.matches.len[4]), "^['|""]|['|""]$", "", "all");
 				}
 
-				if(getQueryable().fieldExists(local.field)) {
+				if(getQueryable().fieldExists(local.field) && getQueryable().fieldIsFilterable(local.field)) {
 					// replace the Queryable field w/ underlying SQL equivalent, in the case of IN, wrap the param in parenthesis
 					local.parsedStatement = ((getQueryable().getFieldSQL(local.field).len() > 0 ? getQueryable().getFieldSQL(local.field) : local.field) & " " & local.operator & (local.operator == "IN" ? " (?)" : " ?"));
 
@@ -85,7 +85,7 @@ component accessors = "true" {
 						}
 					);
 				} else {
-					throw(type = "UndefinedWhereField", message = "The field '#local.field#' does not exist");
+					throw(type = "UndefinedWhereField", message = "The field '#local.field#' does not exist, or is not filterable");
 				}
 
 				variables.activeFieldList = variables.activeFieldList.listAppend(local.field);
