@@ -76,8 +76,44 @@ component extends = "mxunit.framework.TestCase" {
 		assertEquals((1000*(1000+1)/2), local.result.sumFoo);
 	}
 
+	function test_select_aggregate_invalid() {
+		try {
+			local.result = variables.qoq.select("letter, SUM(letter)").where("letter IN ('A', 'M', 'Z')").execute();
+		} catch(Any e) {
+			local.exception = e;
+		}
+
+		assertTrue(structKeyExists(local, "exception") && local.exception.type == "InvalidAggregateField");
+
+		try {
+			local.result = variables.qoq.select("letter, SUM(asdf)").where("letter IN ('A', 'M', 'Z')").execute();
+		} catch(Any e) {
+			local.exception = e;
+		}
+
+		assertTrue(structKeyExists(local, "exception") && local.exception.type == "UndefinedSelectField");
+	}
+
+	function test_select_aggregate_groupBy() {
+		local.result = variables.qoq.select("letter, SUM(foo)").groupBy("letter").execute();
+		debug(local.result);
+		assertEquals(26, local.result.recordCount);
+	}
+
 	function test_select_aggregate_where() {
 		local.result = variables.qoq.select("letter, SUM(foo)").where("letter IN ('A', 'M', 'Z')").execute();
+		debug(local.result);
+		assertEquals(3, local.result.recordCount);
+	}
+
+	function test_select_aggregate_where_groupBy() {
+		local.result = variables.qoq.select("letter, SUM(foo)").where("letter = 'A' OR letter = 'Z'").groupBy("letter").execute();
+		debug(local.result);
+		assertEquals(2, local.result.recordCount);
+	}
+
+	function test_select_aggregate_where_groupBy_orderBy() {
+		local.result = variables.qoq.select("letter, SUM(foo)").where("letter IN ('A', 'M', 'Z')").groupBy("letter").orderBy("letter").execute();
 		debug(local.result);
 		assertEquals(3, local.result.recordCount);
 	}

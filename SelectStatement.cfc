@@ -24,16 +24,23 @@ component accessors = "true" extends = "FilterStatement" {
 	}
 
 	query function execute(numeric limit = -1, numeric offset = 1) {
-		if(arrayLen(variables.aggregates) > 0 && len(variables.groupBy) == 0) {
-			local.groupBy = variables.activeFieldList;
+		if(arrayLen(variables.aggregates) > 0) {
+			if(len(variables.groupBy) == 0) {
+				local.groupBy = variables.select;
 
-			// exclude all aggregates - in order to group on everything else
-			for(local.aggregate in variables.aggregates) {
-				local.groupBy = listDeleteAt(local.groupBy, listFind(local.groupBy, local.aggregate.field));
+				// exclude all aggregates - in order to group on everything else
+				for(local.aggregate in variables.aggregates) {
+					local.groupBy = listDeleteAt(local.groupBy, listFindNoCase(local.groupBy, local.aggregate.alias));
+				}
+
+				if(len(local.groupBy) > 0) {
+					this.groupBy(local.groupBy);
+				}
 			}
 
-			if(len(local.groupBy) > 0) {
-				this.groupBy(local.groupBy);
+			// replace the alias with the actual calculated columns
+			for(local.aggregate in variables.aggregates) {
+				variables.selectSQL = variables.selectSQL.replaceNoCase(local.aggregate.alias, (local.aggregate.operation & "(" & local.aggregate.field & ") " & local.aggregate.alias));
 			}
 		}
 
@@ -45,8 +52,8 @@ component accessors = "true" extends = "FilterStatement" {
 		variables.groupBySQL = "";
 
 		if(variables.groupBy.listLen() > 0) {
-			for(local.i = 1; local.i <= variables.groupBy.listLen(); local.i++) {
-				local.field = trim(variables.groupBy.listGetAt(local.i));
+			for(local.groupBy in variables.groupBy) {
+				local.field = trim(local.groupBy);
 
 				if(!getQueryable().fieldExists(local.field)) {
 					throw(type = "UndefinedGroupByField", message = "The field '#local.field#' does not exist in this IQueryable");
@@ -72,8 +79,8 @@ component accessors = "true" extends = "FilterStatement" {
 		variables.orderCriteria = [];
 
 		if(variables.orderBy.listLen() > 0) {
-			for(local.i = 1; local.i <= variables.orderBy.listLen(); local.i++) {
-				local.orderField = trim(variables.orderBy.listGetAt(local.i));
+			for(local.orderBy in variables.orderBy) {
+				local.orderField = trim(local.orderBy);
 
 				if(local.orderField.listLen(" ") == 1) {
 					local.orderField = local.orderField & " ASC";
@@ -119,9 +126,9 @@ component accessors = "true" extends = "FilterStatement" {
 			variables.select = getQueryable().getFieldList();
 		}
 
-		for(local.field in variables.select) {
-			local.field = local.field.trim();
+		variables.select = variables.select.REReplace("\s+", "", "all");
 
+		for(local.field in variables.select) {
 			if(getQueryable().fieldExists(local.field)) {
 				// preserve the case dictated within the IQueryable
 				local.field = listGetAt(local.fieldList, listFindNoCase(local.fieldList, local.field));
@@ -132,21 +139,32 @@ component accessors = "true" extends = "FilterStatement" {
 				local.aggregateCheck = REFindNoCase("^(AVG|COUNT|MAX|MIN|SUM)\s*\((\w+)\)$", local.field, 1, true);
 
 				if(arrayLen(local.aggregateCheck.len) == 3) {
+					local.rawField = local.field;
 					local.operation = uCase(mid(local.field, local.aggregateCheck.pos[2], local.aggregateCheck.len[2]));
 					local.field = mid(local.field, local.aggregateCheck.pos[3], local.aggregateCheck.len[3]);
 
-					if(getQueryable().fieldExists(local.field) && arrayFindNoCase([ "bigint", "date", "decimal", "double", "float", "integer", "money", "numeric", "real", "smallint", "time", "timestamp", "tinyint" ], getQueryable().getFieldSQLType(local.field))) {
-						local.aggregate = {};
-						// preserve the case dictated within the IQueryable
-						local.aggregate.field = listGetAt(local.fieldList, listFindNoCase(local.fieldList, local.field));
-						local.aggregate.alias = lCase(local.operation) & uCase(mid(local.aggregate.field, 1, 1)) & mid(local.aggregate.field, 2, len(local.aggregate.field));
-						local.aggregate.operation = local.operation;
+					if(getQueryable().fieldExists(local.field)) {
+						if(arrayFindNoCase([ "bigint", "date", "decimal", "double", "float", "integer", "money", "numeric", "real", "smallint", "time", "timestamp", "tinyint" ], getQueryable().getFieldSQLType(local.field))) {
+							local.aggregate = {};
+							// preserve the case dictated within the IQueryable
+							local.aggregate.field = listGetAt(local.fieldList, listFindNoCase(local.fieldList, local.field));
+							local.aggregate.alias = lCase(local.operation) & uCase(mid(local.aggregate.field, 1, 1)) & mid(local.aggregate.field, 2, len(local.aggregate.field));
+							local.aggregate.operation = local.operation;
 
-						arrayAppend(variables.aggregates, local.aggregate);
+							arrayAppend(variables.aggregates, local.aggregate);
 
-						variables.selectSQL = variables.selectSQL.listAppend(local.aggregate.operation & "(" & local.aggregate.field & ") " & local.aggregate.alias);
+							// replace the computed value w/ the alias for now
+							variables.select = replaceNoCase(variables.select, local.rawField, local.aggregate.alias);
+
+							// the actual SQL will be dropped in just before exection
+							local.field = local.aggregate.alias;
+
+							variables.selectSQL = variables.selectSQL.listAppend(local.field);
+						} else {
+							throw(type = "InvalidAggregateField", message = "The field '#local.field#' is not viable for aggregation");
+						}
 					} else {
-						throw(type = "InvalidAggregateField", message = "The field '#local.field#' is not viable for aggregation");
+						throw(type = "UndefinedSelectField", message = "The field '#local.field#' does not exist");
 					}
 				} else {
 					throw(type = "UndefinedSelectField", message = "The field '#local.field#' does not exist");
