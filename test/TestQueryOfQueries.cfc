@@ -2,18 +2,21 @@ component extends = "mxunit.framework.TestCase" {
 
 	function setup() {
 		variables.query = queryNew(
-			"id, createdDate, foo, bar",
-			"varchar, timestamp, integer, bit"
+			"id, createdDate, foo, bar, letter",
+			"varchar, timestamp, integer, bit, varchar"
 		);
+
+		variables.now = now();
 
 		for(local.i = 1; local.i <= 1000; local.i++) {
 			queryAddRow(
 				variables.query,
 				{
 					"id": createUUID(),
-					"createdDate": now(),
+					"createdDate": randRange(1, 5) % 2 ? variables.now : now(),
 					"foo": local.i,
-					"bar": ( local.i % 2 )
+					"bar": ( local.i % 2 ),
+					"letter": listGetAt("A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z", randRange(1, 26))
 				}
 			);
 		}
@@ -34,7 +37,7 @@ component extends = "mxunit.framework.TestCase" {
 	}
 
 	function test_getFieldList() {
-		assertEquals("id,createdDate,foo,bar", variables.qoq.getFieldList());
+		assertEquals("id,createdDate,foo,bar,letter", variables.qoq.getFieldList());
 	}
 
 	function test_getFieldSQL() {
@@ -64,6 +67,19 @@ component extends = "mxunit.framework.TestCase" {
 		assertTrue(local.result.getMetadata().getExtendedMetadata().cached);
 		assertEquals(1000, local.result.getMetadata().getExtendedMetadata().recordCount);
 		assertEquals(1000, local.result.getMetadata().getExtendedMetadata().totalRecordCount);
+	}
+
+	function test_select_aggregate() {
+		local.result = variables.qoq.select("SUM(foo)").execute();
+		debug(local.result);
+		assertEquals(1, local.result.recordCount);
+		assertEquals((1000*(1000+1)/2), local.result.sumFoo);
+	}
+
+	function test_select_aggregate_where() {
+		local.result = variables.qoq.select("letter, SUM(foo)").where("letter IN ('A', 'M', 'Z')").execute();
+		debug(local.result);
+		assertEquals(3, local.result.recordCount);
 	}
 
 	function test_select_orderBy() {

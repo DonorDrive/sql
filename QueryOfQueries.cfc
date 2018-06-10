@@ -118,6 +118,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 	}
 
 	query function executeSelect(required lib.sql.SelectStatement selectStatement, required numeric limit, required numeric offset) {
+		var groupBySQL = arguments.selectStatement.getGroupBySQL();
 		var orderBySQL = arguments.selectStatement.getOrderBySQL();
 		var parameters = arguments.selectStatement.getParameters();
 		var selectSQL = arguments.selectStatement.getSelectSQL();
@@ -155,7 +156,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 		}
 
 		var result = queryExecute(
-			selectSQL & " FROM query " & whereSQL & " " & orderBySQL,
+			selectSQL & " FROM query" & (len(whereSQL) > 0 ? " " & whereSQL : "") & (len(groupBySQL) > 0 ? " " & groupBySQL : "") & (len(orderBySQL) > 0 ? " " & orderBySQL : ""),
 			parameters,
 			{ dbtype: "query" }
 		);

@@ -12,11 +12,11 @@ component accessors = "true" {
 		structAppend(
 			variables,
 			{
-				activeFieldList: arguments.queryable.getFieldList(),
-				parameters: [],
-				queryable: arguments.queryable,
-				where: "",
-				whereCriteria: []
+				"activeFieldList": arguments.queryable.getFieldList(),
+				"parameters": [],
+				"queryable": arguments.queryable,
+				"where": "",
+				"whereCriteria": []
 			}
 		);
 
@@ -70,18 +70,18 @@ component accessors = "true" {
 					arrayAppend(
 						variables.whereCriteria,
 						{
-							field: local.field,
-							operator: local.operator,
-							statement: local.parsedStatement
+							"field": local.field,
+							"operator": local.operator,
+							"statement": local.parsedStatement
 						}
 					);
 
 					arrayAppend(
 						variables.parameters,
 						{
-							cfsqltype: getQueryable().getFieldSQLType(local.field),
-							list: local.operator == "IN",
-							value: local.value
+							"cfsqltype": getQueryable().getFieldSQLType(local.field),
+							"list": local.operator == "IN",
+							"value": local.value
 						}
 					);
 				} else {
