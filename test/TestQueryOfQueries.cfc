@@ -105,7 +105,7 @@ component extends = "mxunit.framework.TestCase" {
 	}
 
 	function test_select_aggregate_where() {
-		local.result = variables.qoq.select("letter, SUM(foo)").where("letter IN ('A', 'M', 'Z')").execute();
+		local.result = variables.qoq.select("letter, SUM(foo)").where("bar = 1 AND (letter = 'A' OR letter = 'M' OR letter = 'Z')").execute();
 		debug(local.result);
 		assertEquals(3, local.result.recordCount);
 	}
@@ -117,7 +117,7 @@ component extends = "mxunit.framework.TestCase" {
 	}
 
 	function test_select_aggregate_where_groupBy_orderBy() {
-		local.result = variables.qoq.select("letter, SUM(foo)").where("letter IN ('A', 'M', 'Z')").groupBy("letter").orderBy("letter").execute();
+		local.result = variables.qoq.select("letter, MAX(foo)").where("bar = 1 AND (letter = 'A' OR letter = 'M' OR letter = 'Z')").groupBy("letter").orderBy("letter").execute();
 		debug(local.result);
 		assertEquals(3, local.result.recordCount);
 	}

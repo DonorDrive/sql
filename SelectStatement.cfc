@@ -149,7 +149,7 @@ component accessors = "true" extends = "FilterStatement" {
 					local.field = mid(local.field, local.aggregateCheck.pos[3], local.aggregateCheck.len[3]);
 
 					if(getQueryable().fieldExists(local.field)) {
-						if(arrayFindNoCase([ "bigint", "date", "decimal", "double", "float", "integer", "money", "numeric", "real", "smallint", "time", "timestamp", "tinyint" ], getQueryable().getFieldSQLType(local.field))) {
+						if(arrayFindNoCase([ "bigint", "date", "datetime", "decimal", "double", "float", "integer", "money", "numeric", "real", "smallint", "time", "timestamp", "tinyint" ], getQueryable().getFieldSQLType(local.field))) {
 							local.aggregate = {};
 							// preserve the case dictated within the IQueryable
 							local.aggregate.field = listGetAt(local.fieldList, listFindNoCase(local.fieldList, local.field));

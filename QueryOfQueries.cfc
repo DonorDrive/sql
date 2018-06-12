@@ -128,6 +128,8 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 		if(parameters.len() > 0) {
 			for(local.i = 1; local.i <= parameters.len(); local.i++) {
 				if(parameters[local.i].cfsqltype CONTAINS "char") {
+					// force the type so the prepared statement doesn't have a fit
+					parameters[local.i].cfsqltype = "varchar";
 					parameters[local.i].value = lCase(parameters[local.i].value);
 				}
 			}
@@ -146,7 +148,10 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 				// QoQ cant do calculated values inside ORDER BY - only as part of the SELECT
 				if(fieldExists(local.field) && getFieldSQLType(local.field) CONTAINS "char") {
 					if(!findNoCase("_order_" & local.field, selectSQL)) {
-						selectSQL = listAppend(selectSQL, "LOWER(" & local.field & ") AS _order_" & local.field);
+						selectSQL = listAppend(selectSQL, "LOWER(" & local.field & ") _order_" & local.field);
+						if(len(groupBySQL) > 0) {
+							groupBySQL = listAppend(groupBySQL, "_order_" & local.field);
+						}
 					}
 
 					local.formattedClause = "_order_" & local.field & " " & listLast(local.i, " ");
@@ -156,7 +161,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 		}
 
 		var result = queryExecute(
-			selectSQL & " FROM query" & (len(whereSQL) > 0 ? " " & whereSQL : "") & (len(groupBySQL) > 0 ? " " & groupBySQL : "") & (len(orderBySQL) > 0 ? " " & orderBySQL : ""),
+			trim(selectSQL & " FROM query " & whereSQL & " " & groupBySQL & " " & orderBySQL),
 			parameters,
 			{ dbtype: "query" }
 		);
