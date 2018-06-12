@@ -55,6 +55,10 @@ component extends = "mxunit.framework.TestCase" {
 		assertEquals("id", variables.qoq.getIdentifierField());
 	}
 
+	function test_getQuery() {
+		assertTrue(isQuery(variables.qoq.getQuery()));
+	}
+
 	function test_insert() {
 		variables.qoq.insert({ "id": createUUID(), "createdDate": now(), "foo": "1001", "bar": false }).execute();
 		local.result = variables.qoq.select().execute();
@@ -114,6 +118,12 @@ component extends = "mxunit.framework.TestCase" {
 
 	function test_select_aggregate_where_groupBy_orderBy() {
 		local.result = variables.qoq.select("letter, SUM(foo)").where("letter IN ('A', 'M', 'Z')").groupBy("letter").orderBy("letter").execute();
+		debug(local.result);
+		assertEquals(3, local.result.recordCount);
+	}
+
+	function test_select_aggregate_where_groupBy_orderBy_aggregate() {
+		local.result = variables.qoq.select("letter, SUM(foo)").where("letter IN ('A', 'M', 'Z')").groupBy("letter").orderBy("sumFoo DESC").execute();
 		debug(local.result);
 		assertEquals(3, local.result.recordCount);
 	}

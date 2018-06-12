@@ -12,7 +12,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 	}
 
 	lib.sql.DeleteStatement function delete() {
-		return new lib.sql.DeleteStatement(this);
+		return new DeleteStatement(this);
 	}
 
 	void function executeDelete(required lib.sql.DeleteStatement deleteStatement) {
@@ -144,7 +144,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 			for(local.i in arguments.selectStatement.getOrderCriteria()) {
 				local.field = listFirst(local.i, " ").trim();
 				// QoQ cant do calculated values inside ORDER BY - only as part of the SELECT
-				if(getFieldSQLType(local.field) CONTAINS "char") {
+				if(fieldExists(local.field) && getFieldSQLType(local.field) CONTAINS "char") {
 					if(!findNoCase("_order_" & local.field, selectSQL)) {
 						selectSQL = listAppend(selectSQL, "LOWER(" & local.field & ") AS _order_" & local.field);
 					}
@@ -161,6 +161,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 			{ dbtype: "query" }
 		);
 
+		// strip _order_ columns from the query
 		if(findNoCase("_order_", result.columnList)) {
 			result = queryExecute(
 				"SELECT #arguments.selectStatement.getSelect()# FROM result",
@@ -212,17 +213,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 	}
 
 	string function getFieldList() {
-		return arrayReduce(
-			variables.query.getMetadata().getColumnLabels(),
-			function(l, v) {
-				if(v != "_modifiedDateUTC") {
-					return listAppend(l, v);
-				} else {
-					return l;
-				}
-			},
-			""
-		);
+		return arrayToList(variables.query.getMetadata().getColumnLabels());
 	}
 
 	string function getFieldSQL(required string fieldName) {
@@ -233,7 +224,12 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 		return variables.query.getMetadata().getColumnTypeName(variables.query.findColumn(javaCast("string", arguments.fieldName)));
 	}
 
-	private void function makeWritable() {
+	// buyer beware! this is passed by reference. changes to the query object may have unintended consequences
+	query function getQuery() {
+		return variables.query;
+	}
+
+	QueryOfQueries function makeWritable() {
 		if(!structKeyExists(variables, "identifierField")) {
 			throw(type = "MissingIdentifierField", message = "No identifierField has been defined");
 		}
@@ -244,10 +240,12 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 			arraySet(local.dateValues, 1, variables.query.recordCount, now());
 			queryAddColumn(variables.query, "_modifiedDateUTC", "timestamp", local.dateValues);
 		}
+
+		return this;
 	}
 
 	lib.sql.InsertStatement function insert(required struct fields) {
-		return new lib.sql.InsertStatement(this, arguments.fields);
+		return new InsertStatement(this, arguments.fields);
 	}
 
 	lib.sql.SelectStatement function select(string fieldList = "*") {
@@ -255,11 +253,11 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 	}
 
 	lib.sql.UpdateStatement function update(required struct fields) {
-		return new lib.sql.UpdateStatement(this, arguments.fields);
+		return new UpdateStatement(this, arguments.fields);
 	}
 
 	lib.sql.UpsertStatement function upsert(required struct fields) {
-		return new lib.sql.UpsertStatement(this, arguments.fields);
+		return new UpsertStatement(this, arguments.fields);
 	}
 
 }

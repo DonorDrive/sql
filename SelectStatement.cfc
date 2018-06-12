@@ -91,7 +91,7 @@ component accessors = "true" extends = "FilterStatement" {
 				local.field = local.orderField.listFirst(" ").trim();
 				local.direction = local.orderField.listLast(" ");
 
-				if(!getQueryable().fieldExists(local.field)) {
+				if(!getQueryable().fieldExists(local.field) && !listFindNoCase(variables.select, local.field)) {
 					throw(type = "UndefinedOrderByField", message = "The field '#local.field#' does not exist in this IQueryable");
 				} else if(local.direction != "ASC" && local.direction != "DESC") {
 					throw(type = "ParseOrderError", message = "The direction '#local.direction#' is not supported");
@@ -100,7 +100,12 @@ component accessors = "true" extends = "FilterStatement" {
 					variables.activeFieldList = variables.activeFieldList.listAppend(local.field);
 					// update order criteria and our SQL
 					arrayAppend(variables.orderCriteria, local.field & " " & local.direction);
-					variables.orderBySQL = listAppend(variables.orderBySQL, (getQueryable().getFieldSQL(local.field).len() > 0 ? getQueryable().getFieldSQL(local.field) : local.field) & " " & local.direction);
+					if(getQueryable().fieldExists(local.field)) {
+						variables.orderBySQL = listAppend(variables.orderBySQL, (getQueryable().getFieldSQL(local.field).len() > 0 ? getQueryable().getFieldSQL(local.field) : local.field) & " " & local.direction);
+					} else {
+						// a calculated field present in the select list
+						variables.orderBySQL = listAppend(variables.orderBySQL, local.field & " " & local.direction);
+					}
 				}
 			}
 
@@ -123,7 +128,7 @@ component accessors = "true" extends = "FilterStatement" {
 		variables.selectSQL = "";
 
 		if(variables.select == "*") {
-			variables.select = getQueryable().getFieldList();
+			variables.select = local.fieldList;
 		}
 
 		variables.select = variables.select.REReplace("\s+", "", "all");
