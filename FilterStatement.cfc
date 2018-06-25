@@ -12,11 +12,11 @@ component accessors = "true" {
 		structAppend(
 			variables,
 			{
-				activeFieldList: arguments.queryable.getFieldList(),
-				parameters: [],
-				queryable: arguments.queryable,
-				where: "",
-				whereCriteria: []
+				"activeFieldList": arguments.queryable.getFieldList(),
+				"parameters": [],
+				"queryable": arguments.queryable,
+				"where": "",
+				"whereCriteria": []
 			}
 		);
 
@@ -57,7 +57,7 @@ component accessors = "true" {
 					local.value = REReplace(mid(arguments.where, local.matches.pos[4], local.matches.len[4]), "^['|""]|['|""]$", "", "all");
 				}
 
-				if(getQueryable().fieldExists(local.field)) {
+				if(getQueryable().fieldExists(local.field) && getQueryable().fieldIsFilterable(local.field)) {
 					// replace the Queryable field w/ underlying SQL equivalent, in the case of IN, wrap the param in parenthesis
 					local.parsedStatement = ((getQueryable().getFieldSQL(local.field).len() > 0 ? getQueryable().getFieldSQL(local.field) : local.field) & " " & local.operator & (local.operator == "IN" ? " (?)" : " ?"));
 
@@ -70,22 +70,22 @@ component accessors = "true" {
 					arrayAppend(
 						variables.whereCriteria,
 						{
-							field: local.field,
-							operator: local.operator,
-							statement: local.parsedStatement
+							"field": local.field,
+							"operator": local.operator,
+							"statement": local.parsedStatement
 						}
 					);
 
 					arrayAppend(
 						variables.parameters,
 						{
-							cfsqltype: getQueryable().getFieldSQLType(local.field),
-							list: local.operator == "IN",
-							value: local.value
+							"cfsqltype": getQueryable().getFieldSQLType(local.field),
+							"list": local.operator == "IN",
+							"value": local.value
 						}
 					);
 				} else {
-					throw(type = "UndefinedWhereField", message = "The field '#local.field#' does not exist");
+					throw(type = "UndefinedWhereField", message = "The field '#local.field#' does not exist, or is not filterable");
 				}
 
 				variables.activeFieldList = variables.activeFieldList.listAppend(local.field);

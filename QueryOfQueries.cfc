@@ -1,6 +1,7 @@
 component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable" {
 
 	property name = "createdDateUTC" type = "date" setter = "false";
+	property name = "identifierField" type = "string";
 
 	QueryOfQueries function init(required query query) {
 		variables.createdDateUTC = now();
@@ -11,7 +12,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 	}
 
 	lib.sql.DeleteStatement function delete() {
-		return new lib.sql.DeleteStatement(this);
+		return new DeleteStatement(this);
 	}
 
 	void function executeDelete(required lib.sql.DeleteStatement deleteStatement) {
@@ -46,14 +47,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 			}
 		}
 
-		structAppend(
-			local.row,
-			{
-				"_modifiedDateUTC": now(),
-				"_queryID": variables.query.recordCount + 1
-			},
-			true
-		);
+		local.row._modifiedDateUTC = now();
 
 		queryAddRow(variables.query, local.row);
 	}
@@ -62,7 +56,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 		makeWritable();
 
 		local.updateRows = queryExecute(
-				"SELECT _queryID FROM query " & arguments.updateStatement.getWhereSQL(),
+				"SELECT #variables.identifierField# FROM query " & arguments.updateStatement.getWhereSQL(),
 				arguments.updateStatement.getParameters(),
 				{ dbtype: "query" }
 			);
@@ -74,7 +68,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 
 			for(local.row in local.updateRows) {
 				// arrayFind is not performant at the scale this will be operating at
-				local.rowNumber = variables.query["_queryID"].indexOf(local.row["_queryID"]) + 1;
+				local.rowNumber = variables.query[variables.identifierField].indexOf(local.row[variables.identifierField]) + 1;
 				for(local.field in local.updateFields) {
 					if(listFindNoCase(variables.query.columnList, local.field)) {
 						querySetCell(variables.query, local.field, local.updateFields[local.field].value, local.rowNumber);
@@ -90,7 +84,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 		makeWritable();
 
 		local.upsertRows = queryExecute(
-				"SELECT _queryID FROM query " & arguments.upsertStatement.getWhereSQL(),
+				"SELECT #variables.identifierField# FROM query " & arguments.upsertStatement.getWhereSQL(),
 				arguments.upsertStatement.getParameters(),
 				{ dbtype: "query" }
 			);
@@ -104,14 +98,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 				local.row[local.field] = local.upsertFields[local.field].value;
 			}
 
-			structAppend(
-				local.row,
-				{
-					"_modifiedDateUTC": now(),
-					"_queryID": variables.query.recordCount + 1
-				},
-				true
-			);
+			local.row._modifiedDateUTC = now();
 
 			queryAddRow(variables.query, local.row);
 		} else {
@@ -119,7 +106,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 			local.now = now();
 
 			for(local.row in local.upsertRows) {
-				local.rowNumber = variables.query["_queryID"].indexOf(local.row["_queryID"]) + 1;
+				local.rowNumber = variables.query[variables.identifierField].indexOf(local.row[variables.identifierField]) + 1;
 
 				for(local.field in local.upsertFields) {
 					querySetCell(variables.query, local.field, local.upsertFields[local.field].value, local.rowNumber);
@@ -131,6 +118,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 	}
 
 	query function executeSelect(required lib.sql.SelectStatement selectStatement, required numeric limit, required numeric offset) {
+		var groupBySQL = arguments.selectStatement.getGroupBySQL();
 		var orderBySQL = arguments.selectStatement.getOrderBySQL();
 		var parameters = arguments.selectStatement.getParameters();
 		var selectSQL = arguments.selectStatement.getSelectSQL();
@@ -140,6 +128,8 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 		if(parameters.len() > 0) {
 			for(local.i = 1; local.i <= parameters.len(); local.i++) {
 				if(parameters[local.i].cfsqltype CONTAINS "char") {
+					// force the type so the prepared statement doesn't have a fit
+					parameters[local.i].cfsqltype = "varchar";
 					parameters[local.i].value = lCase(parameters[local.i].value);
 				}
 			}
@@ -156,9 +146,12 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 			for(local.i in arguments.selectStatement.getOrderCriteria()) {
 				local.field = listFirst(local.i, " ").trim();
 				// QoQ cant do calculated values inside ORDER BY - only as part of the SELECT
-				if(getFieldSQLType(local.field) CONTAINS "char") {
+				if(fieldExists(local.field) && getFieldSQLType(local.field) CONTAINS "char") {
 					if(!findNoCase("_order_" & local.field, selectSQL)) {
-						selectSQL = listAppend(selectSQL, "LOWER(" & local.field & ") AS _order_" & local.field);
+						selectSQL = listAppend(selectSQL, "LOWER(" & local.field & ") _order_" & local.field);
+						if(len(groupBySQL) > 0) {
+							groupBySQL = listAppend(groupBySQL, "_order_" & local.field);
+						}
 					}
 
 					local.formattedClause = "_order_" & local.field & " " & listLast(local.i, " ");
@@ -168,11 +161,12 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 		}
 
 		var result = queryExecute(
-			selectSQL & " FROM query " & whereSQL & " " & orderBySQL,
+			trim(selectSQL & " FROM query " & whereSQL & " " & groupBySQL & " " & orderBySQL),
 			parameters,
 			{ dbtype: "query" }
 		);
 
+		// strip _order_ columns from the query
 		if(findNoCase("_order_", result.columnList)) {
 			result = queryExecute(
 				"SELECT #arguments.selectStatement.getSelect()# FROM result",
@@ -219,18 +213,12 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 		return listFindNoCase(variables.query.columnList, arguments.fieldName);
 	}
 
+	boolean function fieldIsFilterable(required string fieldName) {
+		return fieldExists(arguments.fieldName);
+	}
+
 	string function getFieldList() {
-		return arrayReduce(
-			variables.query.getMetadata().getColumnLabels(),
-			function(l, v) {
-				if(v != "_queryID" && v != "_modifiedDateUTC") {
-					return listAppend(l, v);
-				} else {
-					return l;
-				}
-			},
-			""
-		);
+		return arrayToList(variables.query.getMetadata().getColumnLabels());
 	}
 
 	string function getFieldSQL(required string fieldName) {
@@ -241,25 +229,28 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 		return variables.query.getMetadata().getColumnTypeName(variables.query.findColumn(javaCast("string", arguments.fieldName)));
 	}
 
-	private void function makeWritable() {
-		// set internal columns to facilitate modification
-		if(!listFindNoCase(variables.query.columnList, "_queryID")) {
-			queryAddColumn(variables.query, "_queryID", "varchar", []);
+	// buyer beware! this is passed by reference. changes to the query object may have unintended consequences
+	query function getQuery() {
+		return variables.query;
+	}
 
-			for(local.row in variables.query) {
-				querySetCell(variables.query, "_queryID", variables.query.currentRow, variables.query.currentRow);
-			}
+	QueryOfQueries function makeWritable() {
+		if(!structKeyExists(variables, "identifierField")) {
+			throw(type = "MissingIdentifierField", message = "No identifierField has been defined");
 		}
 
+		// set internal columns to facilitate modification
 		if(!listFindNoCase(variables.query.columnList, "_modifiedDateUTC")) {
 			local.dateValues = [];
 			arraySet(local.dateValues, 1, variables.query.recordCount, now());
 			queryAddColumn(variables.query, "_modifiedDateUTC", "timestamp", local.dateValues);
 		}
+
+		return this;
 	}
 
 	lib.sql.InsertStatement function insert(required struct fields) {
-		return new lib.sql.InsertStatement(this, arguments.fields);
+		return new InsertStatement(this, arguments.fields);
 	}
 
 	lib.sql.SelectStatement function select(string fieldList = "*") {
@@ -267,11 +258,11 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 	}
 
 	lib.sql.UpdateStatement function update(required struct fields) {
-		return new lib.sql.UpdateStatement(this, arguments.fields);
+		return new UpdateStatement(this, arguments.fields);
 	}
 
 	lib.sql.UpsertStatement function upsert(required struct fields) {
-		return new lib.sql.UpsertStatement(this, arguments.fields);
+		return new UpsertStatement(this, arguments.fields);
 	}
 
 }
