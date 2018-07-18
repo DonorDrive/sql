@@ -30,15 +30,15 @@ component accessors = "true" {
 
 		if(arguments.where.len() > 0) {
 			local.whereEval = arguments.where;
-			local.pattern = "(\w+)\s*(!=|>=|>|<=|<|=|IN|LIKE)\s*(\([^\)]+\)|'[^']*'|""[^""]*""|[^\s|)]+)";
+			local.pattern = "(\w+)\s*(!=|>=|>|<=|<|=|IN|NOT\s+IN|LIKE)\s*(\([^\)]+\)|'[^']*'|""[^""]*""|[^\s|)]+)";
 			local.matches = REFindNoCase(local.pattern, arguments.where, 1, true);
 
 			while(local.matches.pos[1] > 0) {
 				local.statement = mid(arguments.where, local.matches.pos[1], local.matches.len[1]);
 				local.field = mid(arguments.where, local.matches.pos[2], local.matches.len[2]);
-				local.operator = mid(arguments.where, local.matches.pos[3], local.matches.len[3]);
+				local.operator = uCase(REReplace(mid(arguments.where, local.matches.pos[3], local.matches.len[3]), "\s+", " ", "all"));
 
-				if(local.operator == "IN") {
+				if(local.operator == "IN" || local.operator == "NOT IN") {
 					// for IN, we need to remove the closing parenthesis, before parsing the value list
 					local.value = trim(REReplace(mid(arguments.where, local.matches.pos[4], local.matches.len[4]), "^\(|\)$", "", "all"));
 					local.values = REMatch("'[^']*'|""[^""]*""|\w+", local.value);
@@ -59,7 +59,7 @@ component accessors = "true" {
 
 				if(getQueryable().fieldExists(local.field) && getQueryable().fieldIsFilterable(local.field)) {
 					// replace the Queryable field w/ underlying SQL equivalent, in the case of IN, wrap the param in parenthesis
-					local.parsedStatement = ((getQueryable().getFieldSQL(local.field).len() > 0 ? getQueryable().getFieldSQL(local.field) : local.field) & " " & local.operator & (local.operator == "IN" ? " (?)" : " ?"));
+					local.parsedStatement = ((getQueryable().getFieldSQL(local.field).len() > 0 ? getQueryable().getFieldSQL(local.field) : local.field) & " " & local.operator & ((local.operator == "IN" || local.operator == "NOT IN") ? " (?)" : " ?"));
 
 					variables.whereSQL = replace(
 						variables.whereSQL,
@@ -80,7 +80,7 @@ component accessors = "true" {
 						variables.parameters,
 						{
 							"cfsqltype": getQueryable().getFieldSQLType(local.field),
-							"list": local.operator == "IN",
+							"list": (local.operator == "IN" || local.operator == "NOT IN"),
 							"value": local.value
 						}
 					);

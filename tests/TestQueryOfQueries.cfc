@@ -123,7 +123,12 @@ component extends = "mxunit.framework.TestCase" {
 	}
 
 	function test_select_aggregate_where_groupBy_orderBy_aggregate() {
-		local.result = variables.qoq.select("letter, SUM(foo)").where("letter IN ('A', 'M', 'Z')").groupBy("letter").orderBy("sumFoo DESC").execute();
+		local.result = variables.qoq
+			.select("letter, SUM(foo)")
+			.where("letter NOT IN ('B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y')")
+			.groupBy("letter")
+			.orderBy("sumFoo DESC")
+			.execute();
 		debug(local.result);
 		assertEquals(3, local.result.recordCount);
 	}
