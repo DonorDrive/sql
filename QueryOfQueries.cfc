@@ -181,21 +181,27 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 		// result pagination, if necessary (this uses the underlying (undocumented) removeRows method so we don't need to run additional QoQ - IT IS ZERO-BASED)
 		if(arguments.offset > totalRecordCount) {
 			result.removeRows(0, totalRecordCount);
-		} else if(arguments.limit >= 0 || arguments.offset > 1) {
-			// default limit to the record count of the query
-			arguments.limit = (arguments.limit >= 0 && arguments.limit < totalRecordCount) ? arguments.limit : totalRecordCount;
+		} else if(arguments.offset == 1 && arguments.limit > 0) {
+			result.removeRows(arguments.limit, totalRecordCount - arguments.limit);
+		} else if(arguments.offset > 1) {
+			if(arguments.limit <= 0) {
+				throw(type = "InvalidLimit", message = "Limit must be furnished when offset is defined");
+			}
 
-			var startRow = (arguments.offset - 1) + arguments.limit;
+			// set limit to the record count of the query if we're past the limit
+			arguments.limit = (arguments.limit > totalRecordCount) ? totalRecordCount : arguments.limit;
+
+			// dealing w/ zero-based
+			limitIndex = arguments.offset - 1;
+
+			var startIndex = arguments.offset + arguments.limit;
 
 			// remove from the end of the query first
-			if(startRow < totalRecordCount) {
-				result.removeRows(startRow, totalRecordCount - startRow);
+			if(startIndex < totalRecordCount) {
+				result.removeRows(startIndex, totalRecordCount - startIndex);
 			}
 
-			// then remove from the front
-			if(arguments.offset - 1 > 0) {
-				result.removeRows(0, arguments.offset - 1);
-			}
+			result.removeRows(0, arguments.offset);
 		}
 
 		result
