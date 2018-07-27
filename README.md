@@ -1,13 +1,13 @@
 # sql
 A fluent interface for SQL interactions in ColdFusion
 
-##Motivation
+## Motivation
 As DonorDrive has grown, our need to pull data from disparate sources has grown. Creating a common set of interfaces to tackle integrations with these data sources facilitates downstream development and maintenance.
 
-##Getting Started
+## Getting Started
 The `sql` project assumes that it will reside in a `lib` directory under the web root, or mapped in the consuming application.
 
-###How does it work?
+### How does it work?
 `IQueryable` implementations must furnish a `select()` method. The implementation instantiates `lib.sql.SelectStatement` along with a reference to itself. The other methods of `IQueryable` allow `SelectStatment` to inspect the `Queryable` for properties necessary to parse and subsequently return control to the `IQueryable` implementation when the `execute()` method is invoked. Pagination and limiting are supported during `execute()` by furnishing `offset` and `limit` arguments.
 
 `IWritable` implementations extend `IQueryable` to fill out the whole CRUD acronym. `insert()`, `update()`, `upsert()`, and `delete()` are all supported by the interface.
