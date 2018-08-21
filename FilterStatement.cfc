@@ -51,45 +51,46 @@ component accessors = "true" {
 					for(local.i = 1; local.i <= local.values.len(); local.i++) {
 						local.values[local.i] = local.values[local.i].REReplace("^['|""]|['|""]$", "", "all");
 					}
-
-					local.value = arrayToList(local.values);
 				} else {
 					local.value = REReplace(mid(arguments.where, local.matches.pos[4], local.matches.len[4]), "^['|""]|['|""]$", "", "all");
+					local.values = [ local.value ];
 				}
 
 				if(getQueryable().fieldExists(local.field) && getQueryable().fieldIsFilterable(local.field)) {
-					switch(getQueryable().getFieldSQLType(local.field)) {
-						case "bigint":
-						case "decimal":
-						case "double":
-						case "money":
-						case "numeric":
-						case "float":
-						case "real":
-						case "integer":
-						case "smallint":
-						case "tinyint":
-							if(!isNumeric(local.value)) {
-								throw(type = "InvalidWhereCriteria", message = "The '#local.value#' is not a valid value for '#local.field#'");
-							}
-							break;
-						case "bit":
-							if(!isBoolean(local.value)) {
-								throw(type = "InvalidWhereCriteria", message = "The '#local.value#' is not a valid value for '#local.field#'");
-							}
-							break;
-						case "date":
-						case "time":
-						case "timestamp":
-							if(!isDate(local.value)) {
-								throw(type = "InvalidWhereCriteria", message = "The '#local.value#' is not a valid value for '#local.field#'");
-							}
-							break;
-						default:
-							if(!isSimpleValue(local.value)) {
-								throw(type = "InvalidWhereCriteria", message = "The '#local.value#' is not a valid value for '#local.field#'");
-							}
-							break;
+					for(local.value in local.values) {
+						switch(getQueryable().getFieldSQLType(local.field)) {
+							case "bigint":
+							case "decimal":
+							case "double":
+							case "money":
+							case "numeric":
+							case "float":
+							case "real":
+							case "integer":
+							case "smallint":
+							case "tinyint":
+								if(!isNumeric(local.value)) {
+									throw(type = "InvalidWhereCriteria", message = "The '#local.value#' is not a valid value for '#local.field#'");
+								}
+								break;
+							case "bit":
+								if(!isBoolean(local.value)) {
+									throw(type = "InvalidWhereCriteria", message = "The '#local.value#' is not a valid value for '#local.field#'");
+								}
+								break;
+							case "date":
+							case "time":
+							case "timestamp":
+								if(!isDate(local.value)) {
+									throw(type = "InvalidWhereCriteria", message = "The '#local.value#' is not a valid value for '#local.field#'");
+								}
+								break;
+							default:
+								if(!isSimpleValue(local.value)) {
+									throw(type = "InvalidWhereCriteria", message = "The '#local.value#' is not a valid value for '#local.field#'");
+								}
+								break;
+						};
 					}
 
 					// replace the Queryable field w/ underlying SQL equivalent, in the case of IN, wrap the param in parenthesis
@@ -115,7 +116,7 @@ component accessors = "true" {
 						{
 							"cfsqltype": getQueryable().getFieldSQLType(local.field),
 							"list": (local.operator == "IN" || local.operator == "NOT IN"),
-							"value": local.value
+							"value": arrayToList(local.values)
 						}
 					);
 				} else {
@@ -137,7 +138,7 @@ component accessors = "true" {
 			try {
 				evaluate(local.whereEval);
 			} catch(Any e) {
-				throw(type = "InvalidWhereCriteria", message = "The 'where' statement could not be parsed");
+				throw(type = "InvalidWhereStatement", message = "The 'where' statement could not be parsed");
 			}
 
 			variables.activeFieldList = variables.activeFieldList.listRemoveDuplicates();

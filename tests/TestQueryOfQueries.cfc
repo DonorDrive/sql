@@ -189,6 +189,10 @@ component extends = "mxunit.framework.TestCase" {
 
 		assertTrue(structKeyExists(local, "threwTheException"));
 		structDelete(local, "threwTheException");
+
+		local.result = variables.qoq.select().where("bar IN (1, 2)").execute();
+
+		assertTrue(local.result.recordCount > 0);
 	}
 
 	function test_select_where_DDMAINT_12971() {
