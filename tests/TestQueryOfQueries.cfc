@@ -159,6 +159,38 @@ component extends = "mxunit.framework.TestCase" {
 		assertEquals(500, local.result.getMetadata().getExtendedMetadata().totalRecordCount);
 	}
 
+	function test_select_where_DD_12812() {
+		try {
+			local.result = variables.qoq.select().where("a").execute();
+		} catch(Any e) {
+			local.threwTheException = true;
+			assertEquals("InvalidWhereStatement", e.type);
+		}
+
+		assertTrue(structKeyExists(local, "threwTheException"));
+		structDelete(local, "threwTheException");
+
+		try {
+			local.result = variables.qoq.select().where("bar = a").execute();
+		} catch(Any e) {
+			local.threwTheException = true;
+			assertEquals("InvalidWhereCriteria", e.type);
+		}
+
+		assertTrue(structKeyExists(local, "threwTheException"));
+		structDelete(local, "threwTheException");
+
+		try {
+			local.result = variables.qoq.select().where("bar =").execute();
+		} catch(Any e) {
+			local.threwTheException = true;
+			assertEquals("InvalidWhereCriteria", e.type);
+		}
+
+		assertTrue(structKeyExists(local, "threwTheException"));
+		structDelete(local, "threwTheException");
+	}
+
 	function test_select_where_DDMAINT_12971() {
 		try {
 			local.result = variables.qoq.select().where("'1' = '1' AND foo = 1").execute();

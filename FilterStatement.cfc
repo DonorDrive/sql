@@ -58,6 +58,40 @@ component accessors = "true" {
 				}
 
 				if(getQueryable().fieldExists(local.field) && getQueryable().fieldIsFilterable(local.field)) {
+					switch(getQueryable().getFieldSQLType(local.field)) {
+						case "bigint":
+						case "decimal":
+						case "double":
+						case "money":
+						case "numeric":
+						case "float":
+						case "real":
+						case "integer":
+						case "smallint":
+						case "tinyint":
+							if(!isNumeric(local.value)) {
+								throw(type = "InvalidWhereCriteria", message = "The '#local.value#' is not a valid value for '#local.field#'");
+							}
+							break;
+						case "bit":
+							if(!isBoolean(local.value)) {
+								throw(type = "InvalidWhereCriteria", message = "The '#local.value#' is not a valid value for '#local.field#'");
+							}
+							break;
+						case "date":
+						case "time":
+						case "timestamp":
+							if(!isDate(local.value)) {
+								throw(type = "InvalidWhereCriteria", message = "The '#local.value#' is not a valid value for '#local.field#'");
+							}
+							break;
+						default:
+							if(!isSimpleValue(local.value)) {
+								throw(type = "InvalidWhereCriteria", message = "The '#local.value#' is not a valid value for '#local.field#'");
+							}
+							break;
+					}
+
 					// replace the Queryable field w/ underlying SQL equivalent, in the case of IN, wrap the param in parenthesis
 					local.parsedStatement = ((getQueryable().getFieldSQL(local.field).len() > 0 ? getQueryable().getFieldSQL(local.field) : local.field) & " " & local.operator & ((local.operator == "IN" || local.operator == "NOT IN") ? " (?)" : " ?"));
 
@@ -100,7 +134,11 @@ component accessors = "true" {
 				throw(type = "InvalidWhereCriteria", message = "The filter criteria (#local.whereEval#) provided could not be parsed");
 			}
 
-			evaluate(local.whereEval);
+			try {
+				evaluate(local.whereEval);
+			} catch(Any e) {
+				throw(type = "InvalidWhereCriteria", message = "The 'where' statement could not be parsed");
+			}
 
 			variables.activeFieldList = variables.activeFieldList.listRemoveDuplicates();
 
