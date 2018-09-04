@@ -30,15 +30,15 @@ component accessors = "true" {
 
 		if(arguments.where.len() > 0) {
 			local.whereEval = arguments.where;
-			local.pattern = "(\w+)\s*(!=|>=|>|<=|<|=|IN|LIKE)\s*(\([^\)]+\)|'[^']*'|""[^""]*""|[^\s|)]+)";
+			local.pattern = "(\w+)\s*(!=|>=|>|<=|<|=|IN|NOT\s+IN|LIKE)\s*(\([^\)]+\)|'[^']*'|""[^""]*""|[^\s|)]+)";
 			local.matches = REFindNoCase(local.pattern, arguments.where, 1, true);
 
 			while(local.matches.pos[1] > 0) {
 				local.statement = mid(arguments.where, local.matches.pos[1], local.matches.len[1]);
 				local.field = mid(arguments.where, local.matches.pos[2], local.matches.len[2]);
-				local.operator = mid(arguments.where, local.matches.pos[3], local.matches.len[3]);
+				local.operator = uCase(REReplace(mid(arguments.where, local.matches.pos[3], local.matches.len[3]), "\s+", " ", "all"));
 
-				if(local.operator == "IN") {
+				if(local.operator == "IN" || local.operator == "NOT IN") {
 					// for IN, we need to remove the closing parenthesis, before parsing the value list
 					local.value = trim(REReplace(mid(arguments.where, local.matches.pos[4], local.matches.len[4]), "^\(|\)$", "", "all"));
 					local.values = REMatch("'[^']*'|""[^""]*""|\w+", local.value);
@@ -51,15 +51,50 @@ component accessors = "true" {
 					for(local.i = 1; local.i <= local.values.len(); local.i++) {
 						local.values[local.i] = local.values[local.i].REReplace("^['|""]|['|""]$", "", "all");
 					}
-
-					local.value = arrayToList(local.values);
 				} else {
 					local.value = REReplace(mid(arguments.where, local.matches.pos[4], local.matches.len[4]), "^['|""]|['|""]$", "", "all");
+					local.values = [ local.value ];
 				}
 
 				if(getQueryable().fieldExists(local.field) && getQueryable().fieldIsFilterable(local.field)) {
+					for(local.value in local.values) {
+						switch(getQueryable().getFieldSQLType(local.field)) {
+							case "bigint":
+							case "decimal":
+							case "double":
+							case "money":
+							case "numeric":
+							case "float":
+							case "real":
+							case "integer":
+							case "smallint":
+							case "tinyint":
+								if(!isNumeric(local.value)) {
+									throw(type = "InvalidWhereCriteria", message = "The '#local.value#' is not a valid value for '#local.field#'");
+								}
+								break;
+							case "bit":
+								if(!isBoolean(local.value)) {
+									throw(type = "InvalidWhereCriteria", message = "The '#local.value#' is not a valid value for '#local.field#'");
+								}
+								break;
+							case "date":
+							case "time":
+							case "timestamp":
+								if(!isDate(local.value)) {
+									throw(type = "InvalidWhereCriteria", message = "The '#local.value#' is not a valid value for '#local.field#'");
+								}
+								break;
+							default:
+								if(!isSimpleValue(local.value)) {
+									throw(type = "InvalidWhereCriteria", message = "The '#local.value#' is not a valid value for '#local.field#'");
+								}
+								break;
+						};
+					}
+
 					// replace the Queryable field w/ underlying SQL equivalent, in the case of IN, wrap the param in parenthesis
-					local.parsedStatement = ((getQueryable().getFieldSQL(local.field).len() > 0 ? getQueryable().getFieldSQL(local.field) : local.field) & " " & local.operator & (local.operator == "IN" ? " (?)" : " ?"));
+					local.parsedStatement = ((getQueryable().getFieldSQL(local.field).len() > 0 ? getQueryable().getFieldSQL(local.field) : local.field) & " " & local.operator & ((local.operator == "IN" || local.operator == "NOT IN") ? " (?)" : " ?"));
 
 					variables.whereSQL = replace(
 						variables.whereSQL,
@@ -80,8 +115,8 @@ component accessors = "true" {
 						variables.parameters,
 						{
 							"cfsqltype": getQueryable().getFieldSQLType(local.field),
-							"list": local.operator == "IN",
-							"value": local.value
+							"list": (local.operator == "IN" || local.operator == "NOT IN"),
+							"value": arrayToList(local.values)
 						}
 					);
 				} else {
@@ -100,7 +135,11 @@ component accessors = "true" {
 				throw(type = "InvalidWhereCriteria", message = "The filter criteria (#local.whereEval#) provided could not be parsed");
 			}
 
-			evaluate(local.whereEval);
+			try {
+				evaluate(local.whereEval);
+			} catch(Any e) {
+				throw(type = "InvalidWhereStatement", message = "The 'where' statement could not be parsed");
+			}
 
 			variables.activeFieldList = variables.activeFieldList.listRemoveDuplicates();
 

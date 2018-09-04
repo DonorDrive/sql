@@ -123,14 +123,32 @@ component extends = "mxunit.framework.TestCase" {
 	}
 
 	function test_select_aggregate_where_groupBy_orderBy_aggregate() {
-		local.result = variables.qoq.select("letter, SUM(foo)").where("letter IN ('A', 'M', 'Z')").groupBy("letter").orderBy("sumFoo DESC").execute();
+		local.result = variables.qoq
+			.select("letter, SUM(foo)")
+			.where("letter NOT IN ('B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y')")
+			.groupBy("letter")
+			.orderBy("sumFoo DESC")
+			.execute();
 		debug(local.result);
 		assertEquals(3, local.result.recordCount);
 	}
 
 	function test_select_orderBy() {
-		local.result = variables.qoq.select("foo").orderBy("foo DESC").execute(limit = 10);
-		assertEquals("1000,999,998,997,996,995,994,993,992,991", valueList(local.result.foo));
+		local.result = variables.qoq.select("foo").orderBy("foo DESC").execute();
+		assertEquals(1000, local.result.getMetadata().getExtendedMetadata().recordCount);
+		assertEquals(1000, local.result.getMetadata().getExtendedMetadata().totalRecordCount);
+	}
+
+	function test_select_orderBy_limit() {
+		local.result = variables.qoq.select("foo").orderBy("foo ASC").execute(limit = 10);
+		assertEquals("1,2,3,4,5,6,7,8,9,10", valueList(local.result.foo));
+		assertEquals(10, local.result.getMetadata().getExtendedMetadata().recordCount);
+		assertEquals(1000, local.result.getMetadata().getExtendedMetadata().totalRecordCount);
+	}
+
+	function test_select_orderBy_limit_offset() {
+		local.result = variables.qoq.select("foo").orderBy("foo ASC").execute(limit = 10, offset = 10);
+		assertEquals("11,12,13,14,15,16,17,18,19,20", valueList(local.result.foo));
 		assertEquals(10, local.result.getMetadata().getExtendedMetadata().recordCount);
 		assertEquals(1000, local.result.getMetadata().getExtendedMetadata().totalRecordCount);
 	}
@@ -139,6 +157,42 @@ component extends = "mxunit.framework.TestCase" {
 		local.result = variables.qoq.select("foo").where("foo > 500").execute();
 		assertEquals(500, local.result.getMetadata().getExtendedMetadata().recordCount);
 		assertEquals(500, local.result.getMetadata().getExtendedMetadata().totalRecordCount);
+	}
+
+	function test_select_where_DD_12812() {
+		try {
+			local.result = variables.qoq.select().where("a").execute();
+		} catch(Any e) {
+			local.threwTheException = true;
+			assertEquals("InvalidWhereStatement", e.type);
+		}
+
+		assertTrue(structKeyExists(local, "threwTheException"));
+		structDelete(local, "threwTheException");
+
+		try {
+			local.result = variables.qoq.select().where("bar = a").execute();
+		} catch(Any e) {
+			local.threwTheException = true;
+			assertEquals("InvalidWhereCriteria", e.type);
+		}
+
+		assertTrue(structKeyExists(local, "threwTheException"));
+		structDelete(local, "threwTheException");
+
+		try {
+			local.result = variables.qoq.select().where("bar =").execute();
+		} catch(Any e) {
+			local.threwTheException = true;
+			assertEquals("InvalidWhereCriteria", e.type);
+		}
+
+		assertTrue(structKeyExists(local, "threwTheException"));
+		structDelete(local, "threwTheException");
+
+		local.result = variables.qoq.select().where("bar IN (1, 2)").execute();
+
+		assertTrue(local.result.recordCount > 0);
 	}
 
 	function test_select_where_DDMAINT_12971() {
@@ -168,7 +222,7 @@ component extends = "mxunit.framework.TestCase" {
 
 	function test_select_where_orderBy() {
 		local.result = variables.qoq.select("foo").where("foo > 500").orderBy("foo DESC").execute(limit = 10, offset = 11);
-		assertEquals("990,989,988,987,986,985,984,983,982,981", valueList(local.result.foo));
+		assertEquals("989,988,987,986,985,984,983,982,981,980", valueList(local.result.foo));
 		assertEquals(10, local.result.getMetadata().getExtendedMetadata().recordCount);
 		assertEquals(500, local.result.getMetadata().getExtendedMetadata().totalRecordCount);
 	}
