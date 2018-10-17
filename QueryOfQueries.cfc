@@ -192,16 +192,16 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 			arguments.limit = (arguments.limit > totalRecordCount) ? totalRecordCount : arguments.limit;
 
 			// dealing w/ zero-based
-			limitIndex = arguments.offset - 1;
+			local.offsetIndex = arguments.offset - 1;
 
-			var startIndex = arguments.offset + arguments.limit;
+			var startIndex = local.offsetIndex + arguments.limit;
 
 			// remove from the end of the query first
 			if(startIndex < totalRecordCount) {
 				result.removeRows(startIndex, totalRecordCount - startIndex);
 			}
 
-			result.removeRows(0, arguments.offset);
+			result.removeRows(0, local.offsetIndex);
 		}
 
 		result
