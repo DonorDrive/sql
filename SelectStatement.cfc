@@ -1,12 +1,10 @@
 component accessors = "true" extends = "FilterStatement" {
 
 	property name = "aggregates" type = "array" setter = "false";
-	property name = "groupBy" type = "string" setter = "false" default = "";
+	property name = "groupByString" type = "string" setter = "false" default = "";
 	property name = "groupBySQL" type = "string" setter = "false" default = "";
-	property name = "orderBy" type = "string" setter = "false" default = "";
 	property name = "orderBySQL" type = "string" setter = "false" default = "";
 	property name = "orderCriteria" type = "array" setter = "false";
-	property name = "select" type = "string";
 	property name = "selectSQL" type = "string" setter = "false" default = "*";
 
 	SelectStatement function init(required IQueryable queryable) {
@@ -16,6 +14,7 @@ component accessors = "true" extends = "FilterStatement" {
 			{
 				"aggregates": [],
 				"orderCriteria": [],
+				"orderBy": "",
 				"select": arguments.queryable.getFieldList()
 			}
 		);
@@ -23,7 +22,7 @@ component accessors = "true" extends = "FilterStatement" {
 		return super.init(arguments.queryable);
 	}
 
-	query function execute(numeric limit = -1, numeric offset = 1) {
+	query function execute(numeric limit = -1, numeric offset = 0) {
 		if(arrayLen(variables.aggregates) > 0) {
 			if(len(variables.groupBy) == 0) {
 				local.groupBy = variables.select;
@@ -44,7 +43,17 @@ component accessors = "true" extends = "FilterStatement" {
 			}
 		}
 
-		return getQueryable().executeSelect(this, arguments.limit, arguments.offset);
+		arguments.selectStatement = this;
+
+		return getQueryable().executeSelect(argumentCollection = arguments);
+	}
+
+	string function getOrderBy() {
+		return variables.orderBy;
+	}
+
+	string function getSelect() {
+		return variables.select;
 	}
 
 	SelectStatement function groupBy(string groupBy = "") {
@@ -56,7 +65,7 @@ component accessors = "true" extends = "FilterStatement" {
 				local.field = trim(local.groupBy);
 
 				if(!getQueryable().fieldExists(local.field)) {
-					throw(type = "UndefinedGroupByField", message = "The field '#local.field#' does not exist in this IQueryable");
+					throw(type = "lib.sql.UndefinedGroupByFieldException", message = "The field '#local.field#' does not exist in this IQueryable");
 				} else {
 					// append to our list of active fields
 					variables.activeFieldList = variables.activeFieldList.listAppend(local.field);
@@ -85,27 +94,35 @@ component accessors = "true" extends = "FilterStatement" {
 				if(local.orderField.listLen(" ") == 1) {
 					local.orderField = local.orderField & " ASC";
 				} else if(local.orderField.listLen(" ") > 2) {
-					throw(type = "ParseOrderError", message = "The statement '#local.orderField#' could not be parsed");
+					throw(type = "lib.sql.ParseOrderErrorException", message = "The statement '#local.orderField#' could not be parsed");
 				}
 
 				local.field = local.orderField.listFirst(" ").trim();
 				local.direction = local.orderField.listLast(" ");
 
-				if(!getQueryable().fieldExists(local.field) && !listFindNoCase(variables.select, local.field)) {
-					throw(type = "UndefinedOrderByField", message = "The field '#local.field#' does not exist in this IQueryable");
+				if((!getQueryable().fieldExists(local.field) || !getQueryable().fieldIsFilterable(local.field))
+						&& !listFindNoCase(variables.select, local.field)
+					) {
+					throw(type = "lib.sql.UndefinedOrderByFieldException", message = "The field '#local.field#' does not exist, or is not filterable");
 				} else if(local.direction != "ASC" && local.direction != "DESC") {
-					throw(type = "ParseOrderError", message = "The direction '#local.direction#' is not supported");
+					throw(type = "lib.sql.ParseOrderErrorException", message = "The direction '#local.direction#' is not supported");
 				} else {
+					if(getQueryable().fieldExists(local.field)) {
+						// preserve the case dictated within the IQueryable
+						local.field = listGetAt(variables.fieldList, listFindNoCase(variables.fieldList, local.field));
+
+						variables.orderBySQL = listAppend(variables.orderBySQL, (getQueryable().getFieldSQL(local.field).len() > 0 ? getQueryable().getFieldSQL(local.field) : local.field) & " " & local.direction);
+					} else {
+						local.field = listGetAt(variables.select, listFindNoCase(variables.select, local.field));
+
+						// a calculated field present in the select list
+						variables.orderBySQL = listAppend(variables.orderBySQL, local.field & " " & local.direction);
+					}
+
 					// append to our list of active fields
 					variables.activeFieldList = variables.activeFieldList.listAppend(local.field);
 					// update order criteria and our SQL
 					arrayAppend(variables.orderCriteria, local.field & " " & local.direction);
-					if(getQueryable().fieldExists(local.field)) {
-						variables.orderBySQL = listAppend(variables.orderBySQL, (getQueryable().getFieldSQL(local.field).len() > 0 ? getQueryable().getFieldSQL(local.field) : local.field) & " " & local.direction);
-					} else {
-						// a calculated field present in the select list
-						variables.orderBySQL = listAppend(variables.orderBySQL, local.field & " " & local.direction);
-					}
 				}
 			}
 
@@ -119,16 +136,13 @@ component accessors = "true" extends = "FilterStatement" {
 	}
 
 	SelectStatement function select(string select = "*") {
-		// start with the casing dictated upstream
-		local.fieldList = getQueryable().getFieldList();
-
 		// assume that by calling select, the user is starting from the top
 		variables.activeFieldList = "";
 		variables.select = arguments.select;
 		variables.selectSQL = "";
 
 		if(variables.select == "*") {
-			variables.select = local.fieldList;
+			variables.select = variables.fieldList;
 		}
 
 		variables.select = variables.select.REReplace("\s+", "", "all");
@@ -136,7 +150,7 @@ component accessors = "true" extends = "FilterStatement" {
 		for(local.field in variables.select) {
 			if(getQueryable().fieldExists(local.field)) {
 				// preserve the case dictated within the IQueryable
-				local.field = listGetAt(local.fieldList, listFindNoCase(local.fieldList, local.field));
+				local.field = listGetAt(variables.fieldList, listFindNoCase(variables.fieldList, local.field));
 
 				variables.selectSQL = variables.selectSQL.listAppend(getQueryable().getFieldSQL(local.field).len() > 0 ? getQueryable().getFieldSQL(local.field) & " " & local.field : local.field);
 			} else {
@@ -149,10 +163,10 @@ component accessors = "true" extends = "FilterStatement" {
 					local.field = mid(local.field, local.aggregateCheck.pos[3], local.aggregateCheck.len[3]);
 
 					if(getQueryable().fieldExists(local.field)) {
-						if(arrayFindNoCase([ "bigint", "date", "datetime", "decimal", "double", "float", "integer", "money", "numeric", "real", "smallint", "time", "timestamp", "tinyint" ], getQueryable().getFieldSQLType(local.field))) {
+						if(local.operation == "COUNT" || arrayFindNoCase([ "bigint", "date", "datetime", "decimal", "double", "float", "integer", "money", "numeric", "real", "smallint", "time", "timestamp", "tinyint" ], getQueryable().getFieldSQLType(local.field))) {
 							local.aggregate = {};
 							// preserve the case dictated within the IQueryable
-							local.aggregate.field = listGetAt(local.fieldList, listFindNoCase(local.fieldList, local.field));
+							local.aggregate.field = listGetAt(variables.fieldList, listFindNoCase(variables.fieldList, local.field));
 							local.aggregate.alias = lCase(local.operation) & uCase(mid(local.aggregate.field, 1, 1)) & mid(local.aggregate.field, 2, len(local.aggregate.field));
 							local.aggregate.operation = local.operation;
 
@@ -166,13 +180,13 @@ component accessors = "true" extends = "FilterStatement" {
 
 							variables.selectSQL = variables.selectSQL.listAppend(local.field);
 						} else {
-							throw(type = "InvalidAggregateField", message = "The field '#local.field#' is not viable for aggregation");
+							throw(type = "lib.sql.InvalidAggregateFieldException", message = "The field '#local.field#' is not viable for aggregation");
 						}
 					} else {
-						throw(type = "UndefinedSelectField", message = "The field '#local.field#' does not exist");
+						throw(type = "lib.sql.UndefinedSelectFieldException", message = "The field '#local.field#' does not exist");
 					}
 				} else {
-					throw(type = "UndefinedSelectField", message = "The field '#local.field#' does not exist");
+					throw(type = "lib.sql.UndefinedSelectFieldException", message = "The field '#local.field#' does not exist");
 				}
 			}
 

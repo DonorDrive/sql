@@ -181,27 +181,24 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 		// result pagination, if necessary (this uses the underlying (undocumented) removeRows method so we don't need to run additional QoQ - IT IS ZERO-BASED)
 		if(arguments.offset > totalRecordCount) {
 			result.removeRows(0, totalRecordCount);
-		} else if(arguments.offset == 1 && arguments.limit > 0) {
+		} else if(arguments.offset == 0 && arguments.limit > 0) {
 			result.removeRows(arguments.limit, totalRecordCount - arguments.limit);
-		} else if(arguments.offset > 1) {
+		} else if(arguments.offset > 0) {
 			if(arguments.limit <= 0) {
-				throw(type = "InvalidLimit", message = "Limit must be furnished when offset is defined");
+				throw(type = "lib.sql.InvalidLimitException", message = "Limit must be furnished when offset is defined");
 			}
 
 			// set limit to the record count of the query if we're past the limit
 			arguments.limit = (arguments.limit > totalRecordCount) ? totalRecordCount : arguments.limit;
 
-			// dealing w/ zero-based
-			local.offsetIndex = arguments.offset - 1;
-
-			var startIndex = local.offsetIndex + arguments.limit;
+			var startIndex = arguments.offset + arguments.limit;
 
 			// remove from the end of the query first
 			if(startIndex < totalRecordCount) {
 				result.removeRows(startIndex, totalRecordCount - startIndex);
 			}
 
-			result.removeRows(0, local.offsetIndex);
+			result.removeRows(0, arguments.offset);
 		}
 
 		result
@@ -242,7 +239,7 @@ component accessors = "true" implements = "lib.sql.IQueryable,lib.sql.IWritable"
 
 	QueryOfQueries function makeWritable() {
 		if(!structKeyExists(variables, "identifierField")) {
-			throw(type = "MissingIdentifierField", message = "No identifierField has been defined");
+			throw(type = "lib.sql.MissingIdentifierFieldException", message = "No identifierField has been defined");
 		}
 
 		// set internal columns to facilitate modification
