@@ -87,7 +87,7 @@ component extends = "mxunit.framework.TestCase" {
 			local.exception = e;
 		}
 
-		assertTrue(structKeyExists(local, "exception") && local.exception.type == "InvalidAggregateField");
+		assertTrue(structKeyExists(local, "exception") && local.exception.type == "lib.sql.InvalidAggregateFieldException");
 
 		try {
 			local.result = variables.qoq.select("letter, SUM(asdf)").where("letter IN ('A', 'M', 'Z')").execute();
@@ -95,7 +95,7 @@ component extends = "mxunit.framework.TestCase" {
 			local.exception = e;
 		}
 
-		assertTrue(structKeyExists(local, "exception") && local.exception.type == "UndefinedSelectField");
+		assertTrue(structKeyExists(local, "exception") && local.exception.type == "lib.sql.UndefinedSelectFieldException");
 	}
 
 	function test_select_aggregate_groupBy() {
@@ -105,7 +105,7 @@ component extends = "mxunit.framework.TestCase" {
 	}
 
 	function test_select_aggregate_where() {
-		local.result = variables.qoq.select("letter, SUM(foo)").where("bar = 1 AND (letter = 'A' OR letter = 'M' OR letter = 'Z')").execute();
+		local.result = variables.qoq.select("letter, SUM(foo)").where("bar = 1 AND (letter = 'A' OR letter = 'M' OR letter = 'Z')").groupBy("letter").execute();
 		debug(local.result);
 		assertEquals(3, local.result.recordCount);
 	}
@@ -164,7 +164,7 @@ component extends = "mxunit.framework.TestCase" {
 			local.result = variables.qoq.select().where("a").execute();
 		} catch(Any e) {
 			local.threwTheException = true;
-			assertEquals("InvalidWhereStatement", e.type);
+			assertEquals("lib.sql.InvalidWhereStatementException", e.type);
 		}
 
 		assertTrue(structKeyExists(local, "threwTheException"));
@@ -174,7 +174,7 @@ component extends = "mxunit.framework.TestCase" {
 			local.result = variables.qoq.select().where("bar = a").execute();
 		} catch(Any e) {
 			local.threwTheException = true;
-			assertEquals("InvalidWhereCriteria", e.type);
+			assertEquals("lib.sql.InvalidWhereCriteriaException", e.type);
 		}
 
 		assertTrue(structKeyExists(local, "threwTheException"));
@@ -184,7 +184,7 @@ component extends = "mxunit.framework.TestCase" {
 			local.result = variables.qoq.select().where("bar =").execute();
 		} catch(Any e) {
 			local.threwTheException = true;
-			assertEquals("InvalidWhereCriteria", e.type);
+			assertEquals("lib.sql.InvalidWhereCriteriaException", e.type);
 		}
 
 		assertTrue(structKeyExists(local, "threwTheException"));
@@ -200,7 +200,7 @@ component extends = "mxunit.framework.TestCase" {
 			local.result = variables.qoq.select().where("'1' = '1' AND foo = 1").execute();
 		} catch(Any e) {
 			local.threwTheException = true;
-			assertEquals("InvalidWhereCriteria", e.type);
+			assertEquals("lib.sql.InvalidWhereCriteriaException", e.type);
 		}
 
 		assertTrue(structKeyExists(local, "threwTheException"));
@@ -221,8 +221,8 @@ component extends = "mxunit.framework.TestCase" {
 	}
 
 	function test_select_where_orderBy() {
-		local.result = variables.qoq.select("foo").where("foo > 500").orderBy("foo DESC").execute(limit = 10, offset = 11);
-		assertEquals("989,988,987,986,985,984,983,982,981,980", valueList(local.result.foo));
+		local.result = variables.qoq.select("foo").where("foo > 500").orderBy("foo DESC").execute(limit = 10, offset = 10);
+		assertEquals("990,989,988,987,986,985,984,983,982,981", valueList(local.result.foo));
 		assertEquals(10, local.result.getMetadata().getExtendedMetadata().recordCount);
 		assertEquals(500, local.result.getMetadata().getExtendedMetadata().totalRecordCount);
 	}
