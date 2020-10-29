@@ -79,7 +79,7 @@ component implements = "lib.sql.IQueryable" {
 		throw(type = "lib.sql.MethodNotImplementedException");
 	}
 
-	void function seedFromQueryable(boolean overwrite = false) {
+	void function seedFromQueryable(boolean overwrite = false, string where = "") {
 		throw(type = "lib.sql.MethodNotImplementedException");
 	}
 
